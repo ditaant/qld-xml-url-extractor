@@ -30,20 +30,25 @@ def get_xml_url():
 @app.route('/find-html-url', methods=['POST'])
 def find_html_url():
     data = request.json
+    print("📥 Received request:", data)
+
     year = data.get("year")
     bill_name = data.get("billName")
 
     if not year or not bill_name:
+        print("❌ Missing inputs.")
         return jsonify({"error": "Missing year or billName"}), 400
 
     url = f"https://www.legislation.qld.gov.au/browse/bills#/bill/year/{year}/58"
+    print("🌐 Navigating to:", url)
 
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
             page = browser.new_page()
             page.goto(url, wait_until="networkidle")
-            page.wait_for_selector("table")
+            page.wait_for_selector("table", timeout=10000)
+            print("✅ Table found on page.")
 
             html_url = page.eval_on_selector_all(
                 "table tr",
@@ -58,17 +63,17 @@ def find_html_url():
                 }""",
                 bill_name
             )
+
             browser.close()
+
     except Exception as e:
+        print("❌ Error occurred:", str(e))
         return jsonify({"error": "Failed to scrape page", "details": str(e)}), 500
 
     if html_url:
+        print("✅ Match found:", html_url)
         return jsonify({"htmlUrl": html_url})
     else:
+        print("❌ No matching bill found.")
         return jsonify({"error": "Bill not found"}), 404
-
-
-# ✅ Only one app.run at the end
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=10000)
 
