@@ -1,0 +1,13 @@
+{
+  "name": "pdf-fetcher",
+  "version": "1.0.0",
+  "main": "pdf-fetcher.js",
+  "scripts": {
+    "start": "node pdf-fetcher.js"
+  },
+  "dependencies": {
+    "chrome-aws-lambda": "^10.1.0",
+    "express": "^4.18.2",
+    "puppeteer": "^24.10.2"
+  }
+}
