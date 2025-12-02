@@ -4,7 +4,7 @@
 
 npm i 
 
-npm start pdf-fetcher.js
+node pdf-fetcher.js
 
 
 /pdf?url={url}
