@@ -4,6 +4,7 @@ const { downloadDocx } = require("./docxHandler");
 
 const app = express();
 
+// PDF fetch route
 app.get("/pdf", async (req, res) => {
   const url = req.query.url;
   if (!url) {
@@ -12,10 +13,9 @@ app.get("/pdf", async (req, res) => {
 
   let browser;
   try {
-    // Launch Puppeteer with Docker-safe args
+    // Launch Puppeteer with safe args for Docker/Railway
     browser = await puppeteer.launch({
-      headless: true,
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium",
+      headless: "new", // modern headless mode
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -28,41 +28,43 @@ app.get("/pdf", async (req, res) => {
 
     const page = await browser.newPage();
 
+    // Set a realistic User-Agent
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
     );
+    const origin = new URL(url).origin;
 
-    // Step 1: Visit site root
     console.log("Navigating to homepage...");
-    await page.goto("https://parlinfo.aph.gov.au/", {
+    await page.goto(origin, {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
 
-    // Step 2: Wait for WAF redirect
+    // Try to detect WAF redirect
     try {
-      await page.waitForRequest((r) => r.url().includes("/.azwaf/"), { timeout: 15000 });
+      await page.waitForRequest((r) => r.url().includes("/.azwaf/"), {
+        timeout: 15000,
+      });
       console.log("Detected WAF challenge request");
     } catch {
       console.warn("No explicit WAF redirect detected within timeout");
     }
 
-    // Step 3: Let JS run
+    // Let JS settle
     await new Promise((resolve) => setTimeout(resolve, 8000));
 
-    // Step 4: Grab cookies
+    // Grab cookies
     const cookies = await page.cookies();
-    console.log("Cookies received from WAF:", cookies);
+    console.log("Cookies received:", cookies);
 
     if (!cookies.length) {
       return res.status(500).send("No cookies set by WAF challenge");
     }
 
-    // Step 5: Build cookie header
     const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
     console.log("Using cookie header:", cookieHeader);
 
-    // Step 6: Fetch PDF inside the page context
+    // Fetch the PDF inside the page context
     const pdfData = await page.evaluate(async (url, cookieHeader) => {
       const response = await fetch(url, {
         headers: {
@@ -77,8 +79,6 @@ app.get("/pdf", async (req, res) => {
       const arrayBuffer = await response.arrayBuffer();
       return Array.from(new Uint8Array(arrayBuffer));
     }, url, cookieHeader);
-
-    console.log("PDF data length:", pdfData.length);
 
     if (!pdfData.length) {
       console.error("PDF data is empty");
@@ -98,7 +98,7 @@ app.get("/pdf", async (req, res) => {
   }
 });
 
-// DOCX route
+// DOCX fetch route
 app.get("/docx", async (req, res) => {
   const url = req.query.url;
   if (!url) {
@@ -119,7 +119,8 @@ app.get("/docx", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3176;
+// Railway or Docker will inject PORT automatically
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`PDF fetcher running on port ${PORT}`);
 });
